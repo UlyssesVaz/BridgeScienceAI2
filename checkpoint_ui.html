@@ -143,37 +143,62 @@
             // Original goal
             originalGoalEl.textContent = data.original_research_goal;
 
-            // AI Message - parse the structured message
-            const assistantMessage = data.messages.find(m => m.role === 'assistant');
-            if (assistantMessage) {
-                const lines = assistantMessage.content.split('\n');
-                aiMessageHeaderEl.textContent = lines[0]; // First line: "✓ I've analyzed..."
+            // AI Analysis Card - Use clean scratchpad data
+            // Header: Executive summary from scratchpad
+            const executiveSummary = data.scratchpad?.task_rationale_summary ||
+                                   "Analysis complete. Review proposed tasks below.";
+            aiMessageHeaderEl.textContent = `✓ ${executiveSummary}`;
 
-                // Parse bullet points
-                const bulletPoints = lines.slice(2).filter(line => line.trim().startsWith('•'));
-                aiMessageContentEl.innerHTML = bulletPoints.map(line => {
-                    const cleaned = line.replace('•', '').trim();
-                    return `<div class="flex items-start">
-                        <span class="text-blue-600 mr-2">•</span>
-                        <span>${cleaned}</span>
-                    </div>`;
-                }).join('');
-            }
+            // Content: Structured confirmation details
+            const refinedGoal = data.refined_research_goal || "Processing...";
+            const complexity = data.scratchpad?.complexity || "Medium";
+            const domains = data.scratchpad?.domains || data.scratchpad?.primary_domains || [];
+            const domainsDisplay = domains.slice(0, 3).join(', ') +
+                                 (domains.length > 3 ? ` +${domains.length - 3} more` : '');
 
-            // Tasks
-            taskListEl.innerHTML = data.task_list.map((task, index) => `
-                <div class="flex items-start border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                    <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-semibold text-sm mr-3">
-                        ${index + 1}
+            aiMessageContentEl.innerHTML = `
+                <div class="space-y-2">
+                    <div class="flex items-start">
+                        <span class="text-blue-600 font-semibold mr-2 min-w-[120px]">Goal:</span>
+                        <span class="text-gray-800">${refinedGoal}</span>
                     </div>
-                    <div class="flex-1">
-                        <p class="text-gray-800">${task.description}</p>
-                        <span class="inline-block mt-2 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                            ${task.status}
-                        </span>
+                    <div class="flex items-start">
+                        <span class="text-blue-600 font-semibold mr-2 min-w-[120px]">Complexity:</span>
+                        <span class="text-gray-800">${complexity}</span>
+                    </div>
+                    <div class="flex items-start">
+                        <span class="text-blue-600 font-semibold mr-2 min-w-[120px]">Domains:</span>
+                        <span class="text-gray-800">${domainsDisplay}</span>
+                    </div>
+                    <div class="flex items-start">
+                        <span class="text-blue-600 font-semibold mr-2 min-w-[120px]">Next Steps:</span>
+                        <span class="text-gray-800">${data.task_list.length} tasks identified</span>
                     </div>
                 </div>
-            `).join('');
+            `;
+
+            // Tasks - Filter out the analysis task (t1) and show only experiment tasks
+            const experimentTasks = data.task_list.filter(task => task.id !== 't1');
+
+            taskListEl.innerHTML = experimentTasks.map((task, index) => {
+                // Show task rationale if available
+                const rationaleHtml = task.result ?
+                    `<p class="text-sm text-gray-600 mt-2 italic">${task.result}</p>` : '';
+
+                return `
+                    <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-semibold text-sm mr-3">
+                                ${index + 1}
+                            </div>
+                            <div class="flex-1">
+                                <p class="text-gray-800 font-medium">${task.description}</p>
+                                ${rationaleHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
 
             // Debug data
             debugDataEl.textContent = JSON.stringify(data, null, 2);
