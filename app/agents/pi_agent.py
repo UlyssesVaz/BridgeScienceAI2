@@ -58,13 +58,11 @@ class PIAgent(BaseAgent):
             }
         )
         
-        # Log initial action
+        # Log initial action (lightweight provenance only)
         state.add_audit_entry(
             agent="pi_agent",
             action="planning_initiated",
             details={
-                "user_profession": user_profession,
-                "original_research_goal": original_research_goal,
                 "num_context_files": num_files
             }
         )
@@ -105,21 +103,30 @@ class PIAgent(BaseAgent):
                 logger.error(f"LLM output failed validation: {e}", exc_info=True)
                 raise ValueError(f"LLM output validation failed: {e}")
             
-            # 4. Store refined goal in scratchpad
+            # 4. Store structured data in scratchpad (machine-readable only)
             state.scratchpad['refined_research_goal'] = validated_output.refined_goal
-            state.scratchpad['reasoning'] = validated_output.reasoning
             state.scratchpad['complexity'] = validated_output.estimated_complexity
             state.scratchpad['domains'] = validated_output.key_domains
-            
-            # 5. Add assistant message
+            # Note: reasoning is discarded - not needed after initial refinement
+
+            # 5. Add concise checkpoint message (UI-ready format)
+            # Format matches the checkpoint wireframe pattern
+            domains_display = ', '.join(validated_output.key_domains[:3])  # Limit to 3 for brevity
+            if len(validated_output.key_domains) > 3:
+                domains_display += f" +{len(validated_output.key_domains) - 3} more"
+
             state.messages.append(
                 ConversationMessage(
                     role="assistant",
-                    content=f"I've analyzed your research goal as a {user_profession}.\n\n"
-                           f"**Refined Goal:** {validated_output.refined_goal}\n\n"
-                           f"**Reasoning:** {validated_output.reasoning}\n\n"
-                           f"**Complexity:** {validated_output.estimated_complexity}\n"
-                           f"**Domains:** {', '.join(validated_output.key_domains)}"
+                    content=(
+                        f"✓ I've analyzed your research goal.\n\n"
+                        f"Let me confirm my understanding:\n"
+                        f"• **Goal:** {validated_output.refined_goal}\n"
+                        f"• **Complexity:** {validated_output.estimated_complexity}\n"
+                        f"• **Domains:** {domains_display}\n"
+                        f"• **Next Steps:** {len(validated_output.recommended_tasks)} tasks identified\n\n"
+                        f"Is this correct?"
+                    )
                 )
             )
             
@@ -138,16 +145,13 @@ class PIAgent(BaseAgent):
             state.current_phase = "planning_complete"
             state.next_agent = "user_approval"
             
-            # 8. Final audit entry
+            # 8. Lightweight audit entry (provenance only, no verbose details)
             state.add_audit_entry(
                 agent="pi_agent",
-                action="planning_complete",
+                action="goal_refined",
                 details={
-                    "refined_research_goal": validated_output.refined_goal,
-                    "tasks_created": len(state.task_list),
                     "complexity": validated_output.estimated_complexity,
-                    "domains": validated_output.key_domains,
-                    "next_agent": state.next_agent
+                    "num_tasks": len(state.task_list)
                 }
             )
             
