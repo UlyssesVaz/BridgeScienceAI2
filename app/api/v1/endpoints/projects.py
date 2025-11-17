@@ -5,10 +5,10 @@ from fastapi import APIRouter, Depends, Form, UploadFile, HTTPException, status,
 from app.services.project_service import ProjectService 
 
 # Import the correct schemas for the ASYNC contract
-from app.schemas.project import ProjectCreationResponse
+from app.schemas.project import ProjectCreationResponse, VirtualLabState
 
 # Import the clean, high-level service dependency
-from app.dependencies import get_project_service 
+from app.dependencies import get_project_service, get_project_repository 
 
 # we are returning a 202 Accepted response for body responses, not anything to do with AUTH.
 # auth is still a multipart/form-data endpoint. NEVER CHANGE THAT TO JSON.
@@ -115,5 +115,67 @@ async def create_project(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to initiate project. Please try again."
         )
-    
-    
+
+
+@router.get(
+    "/projects/{project_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=VirtualLabState,
+)
+async def get_project(
+    project_id: str,
+    owner_id: str = Depends(get_current_user_id),
+    repository = Depends(get_project_repository)
+):
+    """
+    Retrieves the complete state of a research project, including AI analysis results.
+
+    This endpoint returns all project data: original goal, refined goal (if analysis completed),
+    conversation history, task list, audit log, and uploaded files.
+
+    Authorization: User must own the project (validated via Bearer token).
+
+    Note: This endpoint uses the repository directly (not service layer) to avoid
+    unnecessary dependencies like Redis queue which aren't needed for read operations.
+    """
+    try:
+        # Use run_in_threadpool for blocking DB operation
+        from fastapi.concurrency import run_in_threadpool
+
+        project_data = await run_in_threadpool(
+            repository.get_project_with_state,
+            project_id,
+            owner_id
+        )
+
+        # Validate and return
+        return VirtualLabState.model_validate(project_data)
+
+    except ValueError as e:
+        # ValueError is raised for "not found" or "access denied"
+        error_msg = str(e).lower()
+
+        if "not found" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Project {project_id} not found"
+            )
+        elif "does not have access" in error_msg or "access" in error_msg:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have permission to access this project"
+            )
+        else:
+            # Generic ValueError
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+
+    except Exception as e:
+        # Unexpected errors
+        print(f"Error retrieving project {project_id} for user {owner_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve project. Please try again."
+        )

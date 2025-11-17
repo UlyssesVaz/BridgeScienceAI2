@@ -183,6 +183,62 @@ class ProjectService:
             self._storage.cleanup_project_files(project_id)
             raise e
             
+    async def get_project_state(self, project_id: str, owner_id: str) -> dict:
+        """
+        Retrieves the complete state of a project for the GET endpoint.
+
+        Args:
+            project_id: The project ID to retrieve
+            owner_id: The user ID requesting access (for ownership validation)
+
+        Returns:
+            Dictionary containing all project data ready for API response
+
+        Raises:
+            ValueError: If project not found or user doesn't own it
+        """
+        logger.info(
+            "Retrieving project state",
+            extra={"project_id": project_id, "owner_id": owner_id}
+        )
+
+        try:
+            # Delegate to repository (runs in threadpool since it's blocking DB I/O)
+            project_data = await run_in_threadpool(
+                self._repo.get_project_with_state,
+                project_id,
+                owner_id
+            )
+
+            logger.info(
+                "Project state retrieved successfully",
+                extra={
+                    "project_id": project_id,
+                    "num_messages": len(project_data.get("messages", [])),
+                    "num_tasks": len(project_data.get("task_list", [])),
+                    "refined_goal_present": project_data.get("refined_research_goal") is not None
+                }
+            )
+
+            return project_data
+
+        except ValueError as e:
+            # ValueError from repository (not found or access denied)
+            logger.warning(
+                f"Project access error: {str(e)}",
+                extra={"project_id": project_id, "owner_id": owner_id}
+            )
+            raise
+
+        except Exception as e:
+            # Unexpected error
+            logger.error(
+                f"Error retrieving project state",
+                extra={"project_id": project_id, "owner_id": owner_id, "error": str(e)},
+                exc_info=True
+            )
+            raise
+
     # NOTE: The _save_state_to_db logic is now moved to the ASYNC WORKER
-    # The worker will fetch the project, run the agent, and then call a repository 
+    # The worker will fetch the project, run the agent, and then call a repository
     # method to update all related tables (Messages, Tasks, AuditLog).

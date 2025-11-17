@@ -136,6 +136,89 @@ class ProjectRepository:
     #     # ... implementation ...
     #     pass
 
+    def get_project_with_state(self, project_id: str, owner_id: str) -> dict:
+        """
+        Retrieves a project with its complete state, validating ownership.
+
+        This is specifically for the GET /projects/{id} endpoint.
+        Returns all project data including files, messages, tasks, and audit log.
+
+        Args:
+            project_id: The project ID to retrieve
+            owner_id: The user ID requesting access (for ownership validation)
+
+        Returns:
+            Dictionary containing all project data ready for API response
+
+        Raises:
+            ValueError: If project not found or user doesn't own it
+        """
+        # 1. Fetch the project with ownership validation
+        project = self.db.query(Project).filter(
+            Project.project_id == project_id
+        ).first()
+
+        if not project:
+            raise ValueError(f"Project {project_id} not found")
+
+        if project.owner_id != owner_id:
+            raise ValueError(f"User {owner_id} does not have access to project {project_id}")
+
+        # 2. Fetch related data (Messages)
+        message_records = self.db.query(Message).filter(
+            Message.project_id == project_id
+        ).order_by(Message.created_at).all()
+        messages = [
+            ConversationMessage(role=msg.role, content=msg.content)
+            for msg in message_records
+        ]
+
+        # 3. Fetch Tasks
+        task_records = self.db.query(Task).filter(
+            Task.project_id == project_id
+        ).order_by(Task.created_at).all()
+        task_list = [
+            TaskItem(
+                id=task.agent_task_id,  # Use agent_task_id, not task_id
+                description=task.description,
+                status=task.status,
+                result=task.result
+            )
+            for task in task_records
+        ]
+
+        # 4. Fetch Audit Log
+        audit_records = self.db.query(AuditLogEntry).filter(
+            AuditLogEntry.project_id == project_id
+        ).order_by(AuditLogEntry.timestamp).all()
+        audit_log = [
+            AuditEntry(
+                timestamp=entry.timestamp,
+                agent=entry.agent,
+                action=entry.action,
+                current_phase=entry.current_phase,
+                details=entry.details or {}
+            )
+            for entry in audit_records
+        ]
+
+        # 5. Fetch Files
+        files = project.files  # Uses SQLAlchemy relationship
+
+        # 6. Construct response dictionary
+        return {
+            "project_id": project.project_id,
+            "original_research_goal": project.original_research_goal,
+            "refined_research_goal": project.refined_research_goal,
+            "messages": messages,
+            "task_list": task_list,
+            "scratchpad": {},  # TODO: Load from project if we store it later
+            "next_agent": project.next_agent or "pi_agent",
+            "audit_log": audit_log,
+            "current_phase": project.current_phase,
+            "files": files  # ORM objects will be converted by Pydantic
+        }
+
     def save_agent_results(self, project_id: str, final_state: VirtualLabState) -> None:
         """
         Persists the agent's final state back to the database.

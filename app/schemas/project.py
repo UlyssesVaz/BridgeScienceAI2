@@ -49,30 +49,6 @@ class ProjectCreationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True) # Allow ORM mapping
 
 
-# --- Main State Schema (For GET /api/v1/projects/{id}) ---
-
-class VirtualLabState(BaseModel):
-    """
-    API response for the final state retrieval (GET /{id}). 
-    This should NOT be the POST response.
-    """
-    # Project metadata (from DB)
-    project_id: str
-    original_research_goal: str # user inputted goal
-    refined_research_goal: Optional[str] = None #ai refined goal
-    
-    # VirtualLabState contents (re-assembled from normalized tables)
-    messages: List[ConversationMessage]
-    task_list: List[TaskItem]
-    scratchpad: Dict[str, Any] # Scratchpad remains ephemeral/JSON in the DB
-    next_agent: Literal["pi_agent", "router", "worker", "user_approval"]
-    audit_log: List[AuditEntry]
-    current_phase: str
-    
-    model_config = ConfigDict(from_attributes=True)
-
-# ... (Removed VirtualLabStateSchema as it's redundant now) ...
-
 # File info for other endpoints
 class ProjectFileInfo(BaseModel):
     file_id: str
@@ -80,5 +56,31 @@ class ProjectFileInfo(BaseModel):
     file_size: int
     file_type: str
     uploaded_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
+
+
+# --- Main State Schema (For GET /api/v1/projects/{id}) ---
+
+class VirtualLabState(BaseModel):
+    """
+    API response for the final state retrieval (GET /{id}).
+    This should NOT be the POST response.
+    """
+    # Project metadata (from DB)
+    project_id: str
+    original_research_goal: str # user inputted goal
+    refined_research_goal: Optional[str] = None #ai refined goal
+
+    # VirtualLabState contents (re-assembled from normalized tables)
+    messages: List[ConversationMessage]
+    task_list: List[TaskItem]
+    scratchpad: Dict[str, Any] # Scratchpad remains ephemeral/JSON in the DB
+    next_agent: Literal["pi_agent", "router", "worker", "user_approval"]
+    audit_log: List[AuditEntry]
+    current_phase: str
+    files: List[ProjectFileInfo] = []  # Uploaded files metadata
+
+    model_config = ConfigDict(from_attributes=True)
+
+# ... (Removed VirtualLabStateSchema as it's redundant now) ...
