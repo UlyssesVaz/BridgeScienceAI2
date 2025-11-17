@@ -22,19 +22,31 @@ async def get_current_user_id(
 ) -> str:
     """
     TDD-safe auth stub to extract and validate the user ID from the Bearer token.
+    Supports both legacy TEST_AUTH_TOKEN and new format: usr_{user_id}_{random}
     """
     scheme, _, token = (authorization or "").partition(" ")
-    
+
     if scheme.lower() != "bearer" or not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-        
+
+    # Legacy test token support
     if token == "TEST_AUTH_TOKEN":
-        # Return a deterministic test user ID
         return "test-user-f81d4"
+
+    # New token format: usr_{user_id}_{random_token}
+    if token.startswith("usr_"):
+        try:
+            parts = token.split("_")
+            if len(parts) >= 3:
+                # Extract user_id (parts[1] contains the UUID)
+                user_id = parts[1]
+                return user_id
+        except Exception:
+            pass
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

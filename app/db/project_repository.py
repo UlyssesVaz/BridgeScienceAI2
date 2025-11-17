@@ -92,7 +92,7 @@ class ProjectRepository:
         ).order_by(Task.created_at).all()
         task_list = [
             TaskItem(
-                id=task.task_id,
+                id=task.agent_task_id,
                 description=task.description,
                 status=task.status,
                 result=task.result
@@ -115,11 +115,11 @@ class ProjectRepository:
             for entry in audit_records
         ]
         
-        # 5. Reconstruct VirtualLabState (scratchpad could be stored in Project later)
+        # 5. Reconstruct VirtualLabState with scratchpad from database
         return VirtualLabState(
             messages=messages,
             task_list=task_list,
-            scratchpad={},  # TODO: Could load from Project.scratchpad if we store it
+            scratchpad=project.scratchpad or {},  # Load scratchpad from database
             next_agent=project.next_agent or "pi_agent",
             audit_log=audit_log,
             current_phase=project.current_phase
@@ -212,7 +212,7 @@ class ProjectRepository:
             "refined_research_goal": project.refined_research_goal,
             "messages": messages,
             "task_list": task_list,
-            "scratchpad": {},  # TODO: Load from project if we store it later
+            "scratchpad": project.scratchpad or {},  # Load from database
             "next_agent": project.next_agent or "pi_agent",
             "audit_log": audit_log,
             "current_phase": project.current_phase,
@@ -241,6 +241,7 @@ class ProjectRepository:
             project.refined_research_goal = final_state.scratchpad.get('refined_research_goal')
             project.current_phase = final_state.current_phase
             project.next_agent = final_state.next_agent
+            project.scratchpad = final_state.scratchpad  # Persist scratchpad to database
             
             # --- TASK PERSISTENCE (ROBUST ID-BASED CHECK) ---
             

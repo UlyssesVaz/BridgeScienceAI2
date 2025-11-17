@@ -40,6 +40,7 @@ class Project(Base):
     refined_research_goal = Column(String, nullable=True)
     current_phase = Column(String(50), default="intake") # Constrained string length
     next_agent = Column(String(50), nullable=True) # Constrained string length
+    scratchpad = Column(JSON, nullable=True, default=dict)  # Store agent scratchpad data
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     owner = relationship("User", back_populates="projects")
