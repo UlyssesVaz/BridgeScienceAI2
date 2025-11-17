@@ -22,3 +22,6 @@ python-json-logger
 
 # ai
 openai
+
+# document processing
+pypdf2

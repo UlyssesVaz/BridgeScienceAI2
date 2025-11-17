@@ -3,6 +3,7 @@
 from typing import Dict, List, Any, Optional
 import logging
 from pathlib import Path
+import PyPDF2
 
 from .base import BaseAgent, VirtualLabState
 from app.schemas.project import ConversationMessage, TaskItem
@@ -140,9 +141,10 @@ class AnalystAgent(BaseAgent):
 
     async def _analyze_files_placeholder(self, file_paths: Optional[List[str]]) -> Dict[str, Any]:
         """
-        PLACEHOLDER: Simple file reading logic.
+        Extracts text content from files (PDF and text).
 
-        FUTURE: Replace with full PDF parsing + LLM extraction.
+        CURRENT: Proper PDF text extraction with PyPDF2
+        FUTURE: Add LLM-based analysis of extracted content
 
         Args:
             file_paths: List of file paths to analyze
@@ -154,13 +156,15 @@ class AnalystAgent(BaseAgent):
             return {
                 'summary': 'No context files provided.',
                 'key_points': [],
-                'file_count': 0
+                'file_count': 0,
+                'full_text': ''
             }
 
         findings = {
             'summary': '',
             'key_points': [],
-            'file_count': len(file_paths)
+            'file_count': len(file_paths),
+            'full_text': ''
         }
 
         for file_path in file_paths:
@@ -171,18 +175,68 @@ class AnalystAgent(BaseAgent):
                     logger.warning(f"File not found: {file_path}")
                     continue
 
-                # PLACEHOLDER: Just read as text (works for .txt, partial for PDF)
-                # FUTURE: Use PyPDF2 or pdfplumber for proper PDF parsing
-                with open(path, 'r', errors='ignore') as f:
-                    content = f.read(1000)  # Read first 1000 chars
-                    findings['summary'] += f"\n[{path.name}]: {content[:200]}..."
-                    findings['key_points'].append(f"File analyzed: {path.name}")
+                # Extract text based on file type
+                extracted_text = ''
+
+                if path.suffix.lower() == '.pdf':
+                    # PDF extraction
+                    extracted_text = self._extract_text_from_pdf(path)
+                    logger.info(f"Extracted {len(extracted_text)} chars from PDF: {path.name}")
+                else:
+                    # Plain text file
+                    with open(path, 'r', errors='ignore') as f:
+                        extracted_text = f.read()
+                    logger.info(f"Read {len(extracted_text)} chars from text file: {path.name}")
+
+                # Store findings
+                findings['full_text'] += f"\n\n=== {path.name} ===\n{extracted_text}"
+                findings['summary'] += f"\n[{path.name}]: {len(extracted_text)} characters extracted"
+                findings['key_points'].append(f"Analyzed {path.name}: {len(extracted_text)} chars")
 
             except Exception as e:
-                logger.error(f"Error reading file {file_path}: {e}")
-                findings['key_points'].append(f"Error reading {file_path}")
+                logger.error(f"Error reading file {file_path}: {e}", exc_info=True)
+                findings['key_points'].append(f"Error reading {path.name}: {str(e)}")
+
+        # Create a summary snippet (first 500 chars of full text)
+        if findings['full_text']:
+            snippet = findings['full_text'][:500]
+            findings['summary'] += f"\n\nContent preview:\n{snippet}..."
 
         return findings
+
+    def _extract_text_from_pdf(self, pdf_path: Path) -> str:
+        """
+        Extract text from a PDF file using PyPDF2.
+
+        Args:
+            pdf_path: Path to the PDF file
+
+        Returns:
+            Extracted text content
+        """
+        try:
+            text_content = []
+
+            with open(pdf_path, 'rb') as pdf_file:
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                num_pages = len(pdf_reader.pages)
+
+                logger.info(f"Reading PDF: {pdf_path.name} ({num_pages} pages)")
+
+                # Extract text from all pages
+                for page_num in range(num_pages):
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text()
+                    text_content.append(page_text)
+
+                full_text = '\n\n'.join(text_content)
+                logger.info(f"Extracted {len(full_text)} characters from {num_pages} pages")
+
+                return full_text
+
+        except Exception as e:
+            logger.error(f"Error extracting text from PDF {pdf_path}: {e}", exc_info=True)
+            return f"[Error extracting PDF: {str(e)}]"
 
     def _extract_domains_placeholder(self, findings: Dict[str, Any]) -> List[str]:
         """

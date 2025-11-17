@@ -86,13 +86,27 @@ class PIAgent(BaseAgent):
 
             # BRANCH: Run 3 (Post-Analysis) - Generate experiment tasks
             # This includes the case where analysis is complete OR no files were provided
-            # 1. Build the prompt
-            prompts = PIAgentPrompts.build_goal_refinement_prompt(
-                original_goal=original_research_goal,
-                user_profession=user_profession,
-                user_institution=user_institution,
-                num_files=num_files
-            )
+
+            # 1. Build the prompt (different prompt if we have document findings)
+            if analysis_complete:
+                # Use post-analysis prompt with document findings
+                document_findings = state.scratchpad.get('findings', {})
+                prompts = PIAgentPrompts.build_post_analysis_prompt(
+                    original_goal=original_research_goal,
+                    user_profession=user_profession,
+                    user_institution=user_institution,
+                    document_findings=document_findings
+                )
+                logger.info("Using post-analysis prompt with document findings")
+            else:
+                # No files provided, use standard refinement prompt
+                prompts = PIAgentPrompts.build_goal_refinement_prompt(
+                    original_goal=original_research_goal,
+                    user_profession=user_profession,
+                    user_institution=user_institution,
+                    num_files=num_files
+                )
+                logger.info("Using standard refinement prompt (no files)")
             
             # 2. Call LLM
             logger.debug("Calling LLM for goal refinement")
