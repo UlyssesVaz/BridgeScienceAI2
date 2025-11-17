@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BridgeScienceAI - Project Checkpoint</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">BridgeScienceAI</h1>
+            <p class="text-gray-600 mt-2">Research Planning Assistant</p>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p class="mt-4 text-gray-600">Loading project checkpoint...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error" class="hidden bg-red-50 border border-red-200 rounded-lg p-6">
+            <div class="flex items-start">
+                <svg class="w-6 h-6 text-red-600 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <div>
+                    <h3 class="text-red-800 font-semibold">Error Loading Project</h3>
+                    <p id="error-message" class="text-red-700 mt-1"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Checkpoint UI -->
+        <div id="checkpoint" class="hidden space-y-6">
+
+            <!-- Original Goal Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-sm font-semibold text-gray-500 uppercase mb-2">Your Original Request</h2>
+                <p id="original-goal" class="text-gray-800"></p>
+            </div>
+
+            <!-- AI Analysis Card -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                <div class="flex items-start mb-4">
+                    <svg class="w-6 h-6 text-blue-600 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <div class="flex-1">
+                        <h2 class="text-lg font-semibold text-gray-900 mb-4" id="ai-message-header"></h2>
+                        <div id="ai-message-content" class="space-y-3 text-gray-700"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tasks Preview -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Proposed Research Tasks</h2>
+                <div id="task-list" class="space-y-3"></div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">Is this correct?</h2>
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <button id="btn-approve"
+                            class="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                        Yes, continue
+                    </button>
+                    <button id="btn-clarify"
+                            class="flex-1 bg-white hover:bg-gray-50 text-gray-700 font-semibold py-3 px-6 rounded-lg border-2 border-gray-300 transition-colors flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                        Let me clarify
+                    </button>
+                </div>
+            </div>
+
+            <!-- Debug Info (collapsed) -->
+            <details class="bg-gray-100 rounded-lg p-4">
+                <summary class="cursor-pointer text-sm font-semibold text-gray-600">Debug: View Full Response</summary>
+                <pre id="debug-data" class="mt-4 text-xs bg-white p-4 rounded border border-gray-300 overflow-x-auto"></pre>
+            </details>
+
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = 'http://localhost:8000/api/v1';
+        const AUTH_TOKEN = 'TEST_AUTH_TOKEN';
+
+        // Get project ID from URL parameter or use test project
+        const urlParams = new URLSearchParams(window.location.search);
+        const PROJECT_ID = urlParams.get('project_id') || '70039d62-b237-44b7-9d66-6ce0bb069912'; // Default test project
+
+        // DOM Elements
+        const loadingEl = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const errorMessageEl = document.getElementById('error-message');
+        const checkpointEl = document.getElementById('checkpoint');
+        const originalGoalEl = document.getElementById('original-goal');
+        const aiMessageHeaderEl = document.getElementById('ai-message-header');
+        const aiMessageContentEl = document.getElementById('ai-message-content');
+        const taskListEl = document.getElementById('task-list');
+        const debugDataEl = document.getElementById('debug-data');
+        const btnApprove = document.getElementById('btn-approve');
+        const btnClarify = document.getElementById('btn-clarify');
+
+        // Fetch project data from API
+        async function loadProject() {
+            try {
+                const response = await fetch(`${API_BASE}/projects/${PROJECT_ID}`, {
+                    headers: {
+                        'Authorization': `Bearer ${AUTH_TOKEN}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                renderCheckpoint(data);
+
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        // Render checkpoint UI
+        function renderCheckpoint(data) {
+            // Hide loading, show checkpoint
+            loadingEl.classList.add('hidden');
+            checkpointEl.classList.remove('hidden');
+
+            // Original goal
+            originalGoalEl.textContent = data.original_research_goal;
+
+            // AI Message - parse the structured message
+            const assistantMessage = data.messages.find(m => m.role === 'assistant');
+            if (assistantMessage) {
+                const lines = assistantMessage.content.split('\n');
+                aiMessageHeaderEl.textContent = lines[0]; // First line: "✓ I've analyzed..."
+
+                // Parse bullet points
+                const bulletPoints = lines.slice(2).filter(line => line.trim().startsWith('•'));
+                aiMessageContentEl.innerHTML = bulletPoints.map(line => {
+                    const cleaned = line.replace('•', '').trim();
+                    return `<div class="flex items-start">
+                        <span class="text-blue-600 mr-2">•</span>
+                        <span>${cleaned}</span>
+                    </div>`;
+                }).join('');
+            }
+
+            // Tasks
+            taskListEl.innerHTML = data.task_list.map((task, index) => `
+                <div class="flex items-start border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                    <div class="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-semibold text-sm mr-3">
+                        ${index + 1}
+                    </div>
+                    <div class="flex-1">
+                        <p class="text-gray-800">${task.description}</p>
+                        <span class="inline-block mt-2 text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                            ${task.status}
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+
+            // Debug data
+            debugDataEl.textContent = JSON.stringify(data, null, 2);
+
+            // Button handlers
+            btnApprove.onclick = () => handleApprove(data);
+            btnClarify.onclick = () => handleClarify(data);
+        }
+
+        // Show error
+        function showError(message) {
+            loadingEl.classList.add('hidden');
+            errorEl.classList.remove('hidden');
+            errorMessageEl.textContent = message;
+        }
+
+        // Handle "Yes, continue" button
+        function handleApprove(data) {
+            console.log('✅ User approved checkpoint!');
+            console.log('Project ID:', data.project_id);
+            console.log('Next agent:', data.next_agent);
+
+            // TODO: Call API to transition to next phase
+            alert('✅ Approved! (Next phase transition not implemented yet)');
+        }
+
+        // Handle "Let me clarify" button
+        function handleClarify(data) {
+            console.log('✏️ User wants to clarify');
+            console.log('Project ID:', data.project_id);
+
+            // TODO: Open clarification dialog or redirect to chat
+            alert('✏️ Clarification flow not implemented yet. This would open a mini-chat to refine the goal.');
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Loading project:', PROJECT_ID);
+            loadProject();
+        });
+    </script>
+</body>
+</html>
