@@ -1,0 +1,24 @@
+# Virtual Environment
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+
+# SQLite Databases (Your local DB files)
+*.db
+*.sqlite3
+development.db
+test.db
+
+# Environment Variables (Secrets)
+.env
+
+# Build Artifacts
+dist/
+build/
+*.egg-info/
+
+# Logs
+*.log

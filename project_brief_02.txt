@@ -1,0 +1,15 @@
+To: Computational Core Team From: Dr. Ben Chen Date: November 7, 2025 Subject: New R01 Grant - "Blue-sky" project for GPR-Alpha
+
+Team,
+
+Good news, our R01 was funded. We're now kicking off a major discovery effort for a completely novel target, a currently "undruggable" membrane protein we're calling GPR-Alpha.
+
+The primary goal here is to create a high-specificity research tool to help us map this protein's function. We are not worried about therapeutic properties at this stage; we just need a binder that works.
+
+Because this is a completely new target, we have no existing binders to work from. This is a true "de novo" challenge.
+
+The grant gives us a healthy $500k for the computational and initial validation phases, and we have a 12-month discovery timeline before our first milestone report.
+
+What's the best computational strategy to build something from scratch for this?
+
+-Ben
