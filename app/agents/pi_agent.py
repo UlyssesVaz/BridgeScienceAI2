@@ -17,6 +17,12 @@ class PIAgent(BaseAgent):
     """
     Planning & Intake Agent
     Responsible for refining research goals and creating initial task plans.
+
+    MULTI-RUN ARCHITECTURE:
+    - Run 1 (Initial): Creates execution task, hands to analyst_agent
+    - Run 3 (Post-Analysis): Generates experiment tasks, sets user_approval checkpoint
+
+    Detection logic: Checks for scratchpad['findings'] to determine which run.
     """
     
     def __init__(self, llm_provider: Optional[OpenAIProvider] = None):
@@ -58,16 +64,28 @@ class PIAgent(BaseAgent):
             }
         )
         
+        # DETECT: Is this Run 1 (initial) or Run 3 (post-analysis)?
+        analysis_complete = state.scratchpad.get('findings') is not None
+
         # Log initial action (lightweight provenance only)
         state.add_audit_entry(
             agent="pi_agent",
             action="planning_initiated",
             details={
-                "num_context_files": num_files
+                "num_context_files": num_files,
+                "run_type": "post_analysis" if analysis_complete else "initial"
             }
         )
-        
+
         try:
+            # BRANCH: Run 1 (Initial) - Files need analysis
+            if not analysis_complete and num_files > 0:
+                return await self._execute_run1_initial(
+                    state, original_research_goal, user_metadata, num_files
+                )
+
+            # BRANCH: Run 3 (Post-Analysis) - Generate experiment tasks
+            # This includes the case where analysis is complete OR no files were provided
             # 1. Build the prompt
             prompts = PIAgentPrompts.build_goal_refinement_prompt(
                 original_goal=original_research_goal,
@@ -165,7 +183,7 @@ class PIAgent(BaseAgent):
             )
             
             return state
-            
+
         except Exception as e:
             # Log error and add to audit trail
             logger.error(
@@ -173,11 +191,75 @@ class PIAgent(BaseAgent):
                 extra={"error": str(e)},
                 exc_info=True
             )
-            
+
             state.add_audit_entry(
                 agent="pi_agent",
                 action="planning_failed",
                 details={"error": str(e)}
             )
-            
+
             raise
+
+    async def _execute_run1_initial(
+        self,
+        state: VirtualLabState,
+        original_research_goal: str,
+        user_metadata: Dict[str, Any],
+        num_files: int
+    ) -> VirtualLabState:
+        """
+        Run 1 (Initial): Create execution task and hand to analyst_agent.
+
+        This is the first pass when context files are provided.
+        We create a single task for the analyst_agent to analyze the files,
+        then hand control to it.
+
+        Args:
+            state: Current VirtualLabState
+            original_research_goal: User's research goal
+            user_metadata: User context
+            num_files: Number of context files
+
+        Returns:
+            Updated VirtualLabState with execution task
+        """
+        logger.info("PI Agent Run 1: Creating execution task for analyst_agent")
+
+        # Create a single execution task
+        execution_task = TaskItem(
+            id="t1",
+            description=f"Analyze {num_files} context document(s) and extract key findings",
+            status="pending",
+            result=None
+        )
+
+        state.task_list = [execution_task]
+
+        # Add concise message
+        state.messages.append(
+            ConversationMessage(
+                role="assistant",
+                content=f"I've received your research goal and {num_files} document(s). Analyzing now..."
+            )
+        )
+
+        # Hand control to analyst_agent
+        state.current_phase = "analysis_pending"
+        state.next_agent = "analyst_agent"
+
+        # Audit log
+        state.add_audit_entry(
+            agent="pi_agent",
+            action="execution_task_created",
+            details={
+                "next_agent": "analyst_agent",
+                "num_files": num_files
+            }
+        )
+
+        logger.info(
+            "PI Agent Run 1 complete: Handing to analyst_agent",
+            extra={"next_agent": state.next_agent}
+        )
+
+        return state
