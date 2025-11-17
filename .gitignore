@@ -22,3 +22,9 @@ build/
 
 # Logs
 *.log
+
+# Redis
+dump.rdb
+
+# File Storage (Uploaded Documents)
+storage/
