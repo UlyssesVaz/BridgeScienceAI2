@@ -1,7 +1,7 @@
 # app/api/v1/endpoints/projects.py (REFINED - SCALABLE)
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Form, UploadFile, HTTPException, status, Header
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status, Header
 from app.services.project_service import ProjectService 
 
 # Import the correct schemas for the ASYNC contract
@@ -65,11 +65,11 @@ router = APIRouter()
     response_model=ProjectCreationResponse, 
 )
 async def create_project(
-    
+
     # Multipart Form Data (FastAPI handles parsing research_goal and files)
     original_research_goal: str = Form(..., description="The user's primary text prompt."),
-    context_docs: Optional[List[UploadFile]] = Form(None, description="One or more context files."),
-    
+    context_docs: Optional[List[UploadFile]] = File(None, description="One or more context files."),
+
     # Dependencies (Clean, high-level dependencies only)
     owner_id: str = Depends(get_current_user_id),
     project_service: ProjectService = Depends(get_project_service)
